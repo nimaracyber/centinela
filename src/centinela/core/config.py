@@ -386,6 +386,14 @@ class Settings(_Base):
     def _empty_redis(cls, v: str | None) -> str | None:
         return v or None
 
+    @field_validator("connectors", "analyzers", "scoring", "actions", "dashboard", mode="before")
+    @classmethod
+    def _null_section(cls, v: object, info) -> object:
+        """`connectors:` con todos los ejemplos comentados queda en null en YAML: tratarlo como vacío."""
+        if v is None:
+            return [] if info.field_name == "connectors" else {}
+        return v
+
     @model_validator(mode="after")
     def _unique_names(self) -> Settings:
         names = [c.name for c in self.connectors]

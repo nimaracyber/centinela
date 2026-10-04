@@ -42,12 +42,22 @@ No hace falta exponer ninguna URL pública. Sin esto, Centinela consulta el hist
 
 ## Gmail personal
 
-1. En Google Cloud: habilitá **Gmail API**, configurá la *pantalla de consentimiento* (tipo externo, agregate como usuario de prueba)
-   y creá un **ID de cliente OAuth de tipo "App de escritorio"**. Descargá el JSON como `secrets/google-oauth-client.json`.
-2. Configurá el conector con `auth: oauth_user` y `oauth_client_file`.
-3. Ejecutá una vez: `docker compose run --rm api auth gmail-personal` y seguí las instrucciones: te da una
-   dirección para abrir en el navegador (puede ser en otra PC); al terminar, pegás en la terminal la dirección
-   a la que te redirigió. El token queda guardado **cifrado** en la base (necesita `encryption_key`).
+> Lo más simple para una cuenta @gmail.com es el conector **IMAP** (`imap.gmail.com`) con una
+> *contraseña de aplicación* (requiere tener activada la verificación en 2 pasos). OAuth es la alternativa:
+
+1. En Google Cloud: habilitá **Gmail API**, configurá la *pantalla de consentimiento* (tipo externo) y creá un
+   **ID de cliente OAuth de tipo "App de escritorio"**. Descargá el JSON como `secrets/google-oauth-client.json`
+   (en Linux: `chmod 644 secrets/google-oauth-client.json`).
+2. En la pantalla de consentimiento tocá **Publicar app**: si queda "En prueba", Google vence el permiso a los 7 días.
+3. Configurá el conector con `auth: oauth_user` y `oauth_client_file: /config/secrets/google-oauth-client.json`.
+4. Ejecutá una vez `docker compose run --rm ingest auth gmail-personal` (modo liviano:
+   `docker compose -f docker-compose.lite.yml run --rm --no-deps centinela auth gmail-personal`). Te da una
+   dirección para abrir en el navegador (puede ser en otra PC); al autorizar, el navegador muestra un error de
+   "localhost": es normal. Copiá la dirección completa de la barra y pegala en la terminal. El token queda guardado
+   **cifrado** en la base (necesita `encryption_key`).
+
+> `auth` se corre en el servicio `ingest` (modo completo) porque necesita la base de datos y salida a internet;
+> el servicio `api` está en una red interna sin internet.
 
 ## Microsoft 365
 
@@ -78,7 +88,11 @@ No hace falta exponer ninguna URL pública. Sin esto, Centinela consulta el hist
   mailboxes: ["ventas@miempresa.com"]
 ```
 
-Verificá con `docker compose run --rm api auth m365`.
+`tenant_id` es el *Id. de directorio (inquilino)* y `client_id` el *Id. de aplicación (cliente)*, ambos en
+*Información general* de la app. Del secreto copiá la columna **Valor** (no el *Id. de secreto*): se muestra una sola
+vez y vence (6 meses por defecto): renovalo antes.
+
+Verificá con `docker compose run --rm ingest auth m365`.
 
 ## IMAP
 
@@ -121,7 +135,8 @@ Microsoft ya no permite contraseñas por IMAP en cuentas personales: hay que usa
   oauth2: { provider: microsoft, client_id: "<app-id>", tenant: consumers }
 ```
 
-3. `docker compose run --rm api auth hotmail` → te muestra un código para ingresar en microsoft.com/devicelogin.
+3. `docker compose run --rm ingest auth hotmail` → te muestra un código: abrí microsoft.com/devicelogin, ingresalo e
+   iniciá sesión. La terminal sigue sola (no hay que pegar nada).
 
 ## Postfix (milter)
 

@@ -16,6 +16,8 @@ services:
       - ./rules/custom:/app/rules/custom:ro
       - centinela-data:/data
     ports:
+      # dashboard solo en este equipo. Para verlo desde otra PC de la oficina: "8080:8080".
+      # Nunca redirigir este puerto a internet en el router (usar una VPN).
       - "127.0.0.1:8080:8080"
     read_only: true
     tmpfs:

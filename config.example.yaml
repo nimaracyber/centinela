@@ -29,19 +29,20 @@ privacy:
 
 # ---------------------------------------------------------------- de dónde leer los mails
 # Podés combinar varios conectores. Cada uno con un nombre único (minúsculas, guiones).
+# Todos vienen comentados: sacale el "# " a las líneas del que uses (respetando la sangría con ESPACIOS).
 connectors:
 
   # 1) IMAP genérico: hosting propio (cPanel/Plesk), Yahoo, iCloud, Zoho, Dovecot, etc.
-  - name: oficina-imap
-    type: imap
-    host: mail.miempresa.com.ar
-    port: 993
-    security: ssl
-    username: ventas@miempresa.com.ar
-    password: "${IMAP_OFICINA_PASSWORD}"   # Yahoo/iCloud/Gmail exigen "contraseña de aplicación"
-    folders: ["INBOX", "Junk"]
-    idle: true            # tiempo real
-    tag: true             # agrega keyword $Centinela_Malicious / $Centinela_Suspicious (visible en Thunderbird)
+  # - name: oficina-imap
+  #   type: imap
+  #   host: mail.miempresa.com.ar
+  #   port: 993
+  #   security: ssl
+  #   username: ventas@miempresa.com.ar
+  #   password: "${IMAP_OFICINA_PASSWORD}"   # Yahoo/iCloud/Gmail exigen "contraseña de aplicación"
+  #   folders: ["INBOX", "Junk"]
+  #   idle: true            # tiempo real
+  #   tag: true             # agrega keyword $Centinela_Malicious / $Centinela_Suspicious (visible en Thunderbird)
 
   # 2) Google Workspace: cuenta de servicio con delegación de dominio (todos los buzones).
   # - name: workspace
@@ -116,7 +117,7 @@ actions:
     label_suspicious: "Centinela/Sospechoso"
     label_malicious: "Centinela/Malicioso"
   alerts:
-    dashboard_base_url: "https://centinela.miempresa.com.ar"
+    dashboard_base_url: ""   # dirección del panel para el link de las alertas, ej: "http://192.168.1.50:8080"
     dedup_window_minutes: 60
     channels:
       - name: telegram-soporte
@@ -146,6 +147,7 @@ dashboard:
   enabled: true
   port: 8080
   admin_user: admin
-  admin_password_hash: "${CENTINELA_DASHBOARD_PASSWORD_HASH}"
+  # pegá acá, entre comillas simples, lo que devuelve:  docker compose run --rm --no-deps worker hash-password
+  admin_password_hash: ''
   secret_key: "${CENTINELA_DASHBOARD_SECRET_KEY}"
   trusted_proxies: []   # IP del reverse proxy (Caddy/Nginx/Traefik) si hay uno

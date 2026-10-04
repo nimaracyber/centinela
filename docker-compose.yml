@@ -52,7 +52,10 @@ services:
     command: ["run", "--role", "api"]
     environment: { CENTINELA_ROLE: api }
     ports:
-      - "127.0.0.1:8080:8080"   # dashboard: exponer solo detrás de un reverse proxy con HTTPS
+      # dashboard solo en este equipo. Para verlo desde otra PC de la oficina: "8080:8080".
+      # Nunca redirigir este puerto a internet en el router (usar una VPN).
+      - "127.0.0.1:8080:8080"
+    networks: [backend, frontend]   # frontend: red común, necesaria para publicar el puerto del panel
 
   postgres:
     image: postgres:16-alpine
@@ -101,5 +104,6 @@ volumes:
 
 networks:
   backend:
-    internal: true
+    internal: true   # base de datos, Redis y ClamAV: sin acceso desde afuera
+  frontend: {}       # publica el puerto del dashboard (Docker no publica puertos en redes internas)
   egress: {}

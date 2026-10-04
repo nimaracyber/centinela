@@ -51,20 +51,21 @@ git clone https://github.com/nimaracyber/centinela.git
 cd centinela
 cp .env.example .env
 cp config.example.yaml config.yaml
-docker compose run --rm api gen-key          # pegar las claves en .env
-docker compose run --rm api hash-password    # pegar el hash en .env
+# en .env: POSTGRES_PASSWORD con solo letras y números
+docker compose build
+docker compose run --rm --no-deps worker gen-key          # pegar las 2 líneas en .env
+docker compose run --rm --no-deps worker hash-password    # pegar el hash en config.yaml (admin_password_hash, entre comillas simples)
 # editar config.yaml: dominios de tu empresa, conectores y canales de alerta
-docker compose run --rm api check-config
+docker compose run --rm --no-deps worker check-config
 docker compose up -d
 ```
 
-El dashboard queda en `http://127.0.0.1:8080` (publicalo solo detrás de un reverse proxy con HTTPS).
+El dashboard queda en `http://127.0.0.1:8080` en ese equipo. Nunca lo expongas a internet (usá una VPN).
 
-**¿Oficina chica, una sola PC/NAS?** Usá el modo liviano (SQLite, sin Redis ni Postgres):
+**¿Oficina chica, una sola PC/NAS?** Usá el modo liviano (SQLite, sin Redis ni Postgres): los mismos pasos
+con `docker compose -f docker-compose.lite.yml ...` y el servicio `centinela` en lugar de `worker`.
 
-```bash
-docker compose -f docker-compose.lite.yml up -d
-```
+📘 **Guía paso a paso para no técnicos:** [docs/Guia-de-instalacion-Centinela.pdf](docs/Guia-de-instalacion-Centinela.pdf)
 
 ### Probar sin instalar nada en servidores
 
