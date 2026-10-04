@@ -5,7 +5,7 @@
 **Análisis pasivo y en tiempo real del correo de tu PyME.**
 Detecta RATs, stealers, loaders y phishing en adjuntos y links — sin bloquear ni tocar tus mails.
 
-[![CI](https://github.com/tu-usuario/centinela/actions/workflows/ci.yml/badge.svg)](https://github.com/tu-usuario/centinela/actions/workflows/ci.yml)
+[![CI](https://github.com/nimaracyber/centinela/actions/workflows/ci.yml/badge.svg)](https://github.com/nimaracyber/centinela/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/licencia-Apache--2.0-green)
 
@@ -47,7 +47,7 @@ Cada hallazgo suma a un **score de 0 a 100** → `limpio` / `sospechoso` / `mali
 ## Instalación rápida (Docker)
 
 ```bash
-git clone https://github.com/tu-usuario/centinela.git
+git clone https://github.com/nimaracyber/centinela.git
 cd centinela
 cp .env.example .env
 cp config.example.yaml config.yaml
