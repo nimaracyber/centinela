@@ -1,0 +1,105 @@
+# Despliegue completo: conectores, workers escalables, dashboard, Redis, PostgreSQL y ClamAV.
+#   cp .env.example .env && cp config.example.yaml config.yaml   (editar ambos)
+#   docker compose up -d
+#   docker compose up -d --scale worker=3     # más capacidad de análisis
+# Para una oficina chica sin tanto: docker compose -f docker-compose.lite.yml up -d
+
+x-centinela: &centinela
+  image: centinela:local   # se construye con `build: .` la primera vez
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - ./config.yaml:/config/config.yaml:ro
+    - ./secrets:/config/secrets:ro          # credenciales de Google/Microsoft (archivos)
+    - ./rules/custom:/app/rules/custom:ro    # reglas YARA propias o de la comunidad
+    - centinela-data:/data
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  networks: [backend]
+
+services:
+  ingest:
+    <<: *centinela
+    command: ["run", "--role", "ingest"]
+    environment: { CENTINELA_ROLE: ingest }
+    ports:
+      - "8899:8899"   # milter (Postfix)       — quitar si no se usa
+      - "2525:2525"   # SMTP journal (copias)  — quitar si no se usa
+    networks: [backend, egress]
+
+  worker:
+    <<: *centinela
+    command: ["run", "--role", "worker", "--workers", "4"]
+    environment: { CENTINELA_ROLE: worker }
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      clamav: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 2g }
+    networks: [backend, egress]   # egress solo para consultas de hash (MalwareBazaar/VirusTotal) y etiquetado
+
+  api:
+    <<: *centinela
+    command: ["run", "--role", "api"]
+    environment: { CENTINELA_ROLE: api }
+    ports:
+      - "127.0.0.1:8080:8080"   # dashboard: exponer solo detrás de un reverse proxy con HTTPS
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: centinela
+      POSTGRES_USER: centinela
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD en .env}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U centinela -d centinela"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "1gb", "--maxmemory-policy", "noeviction"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes: [clamav-db:/var/lib/clamav]
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      start_period: 300s   # la primera descarga de firmas tarda
+      retries: 5
+    networks: [backend, egress]   # freshclam necesita internet para actualizar firmas
+
+volumes:
+  centinela-data:
+  postgres-data:
+  redis-data:
+  clamav-db:
+
+networks:
+  backend:
+    internal: true
+  egress: {}

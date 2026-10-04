@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Iniciar sesión{% endblock %}
+{% block main_class %}login-wrap{% endblock %}
+{% block content %}
+<div class="card login-card">
+  <div class="login-brand">
+    {{ m.icon("shield") }}
+    <div>
+      <strong>Centinela</strong>
+      <span class="muted small">{{ company_name }} · vigilancia del correo</span>
+    </div>
+  </div>
+  <h1 class="card-title">Iniciar sesión</h1>
+  {% if info %}<p class="notice notice-ok" role="status">{{ info }}</p>{% endif %}
+  {% if error %}<p class="notice notice-error" role="alert">{{ error }}</p>{% endif %}
+  <form class="form-stack" method="post" action="/login" autocomplete="on">
+    <input type="hidden" name="csrf_token" value="{{ login_token }}">
+    <input type="hidden" name="next" value="{{ next_path }}">
+    <div class="field">
+      <label for="username">Usuario</label>
+      <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="200" required value="{{ username }}"{% if not username %} autofocus{% endif %}>
+    </div>
+    <div class="field">
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required{% if username %} autofocus{% endif %}>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">{{ m.icon("lock") }} Entrar</button>
+  </form>
+  <p class="muted small">Si olvidaste la contraseña, generá una nueva con <code>centinela hash-password</code> y actualizá <code>dashboard.admin_password_hash</code>.</p>
+</div>
+{% endblock %}

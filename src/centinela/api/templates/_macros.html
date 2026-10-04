@@ -1,0 +1,101 @@
+{# Macros compartidas. Sin estilos ni scripts inline (CSP). Todo valor externo pasa por autoescape. #}
+
+{% macro icon(name, cls="icon") -%}
+<svg class="{{ cls }}" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "check" -%}<path d="M3.5 8.5l3 3 6-7"/>
+{%- elif name == "alert" -%}<path d="M8 2.2l6.3 11.3H1.7z"/><path d="M8 6.5v3.2"/><path d="M8 11.9v.1"/>
+{%- elif name == "x" -%}<circle cx="8" cy="8" r="6.3"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8"/>
+{%- elif name == "question" -%}<circle cx="8" cy="8" r="6.3"/><path d="M8 4.6v4.2"/><path d="M8 11.3v.1"/>
+{%- elif name == "copy" -%}<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V3.8a1.3 1.3 0 0 0-1.3-1.3H3.8a1.3 1.3 0 0 0-1.3 1.3v5.4a1.3 1.3 0 0 0 1.3 1.3h1.7"/>
+{%- elif name == "external" -%}<path d="M9.5 2.5h4v4"/><path d="M13.5 2.5l-6 6"/><path d="M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3"/>
+{%- elif name == "shield" -%}<path d="M8 1.6l5.4 2v4.1c0 3.3-2.3 5.6-5.4 6.7-3.1-1.1-5.4-3.4-5.4-6.7V3.6z"/><path d="M5.6 8.2l1.7 1.7 3.2-3.4"/>
+{%- elif name == "file" -%}<path d="M9.5 1.8H4.3a1 1 0 0 0-1 1v10.4a1 1 0 0 0 1 1h7.4a1 1 0 0 0 1-1V5z"/><path d="M9.5 1.8V5h3.2"/>
+{%- elif name == "lock" -%}<rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{% macro level_badge(level, score=none) -%}
+{%- set lv = level|level_value -%}
+<span class="badge badge-{{ lv }}">{{ icon(LEVEL_ICONS[lv]) }}<span>{{ lv|level_label }}</span>{% if score is not none %}<span class="badge-score" title="Score de riesgo (0 a 100)">{{ score }}</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro sev_badge(severity) -%}
+<span class="sev sev-{{ severity|severity_class }}">{{ severity|severity_label }}</span>
+{%- endmacro %}
+
+{% macro copy_button(value, label="Copiar") -%}
+<button type="button" class="btn-icon copy-btn" data-copy="{{ value }}" aria-label="{{ label }}" title="{{ label }}">{{ icon("copy") }}<span class="copy-feedback" aria-live="polite"></span></button>
+{%- endmacro %}
+
+{% macro hash_links(sha) -%}
+{%- if is_sha256(sha) -%}
+<a class="ext" href="{{ vt_url(sha) }}" target="_blank" rel="noopener noreferrer" title="Buscar este hash en VirusTotal (se abre en otra pestaña; solo viaja el hash, nunca el archivo)">VirusTotal {{ icon("external") }}<span class="visually-hidden"> (se abre en otra pestaña)</span></a>
+<a class="ext" href="{{ mb_url(sha) }}" target="_blank" rel="noopener noreferrer" title="Buscar este hash en MalwareBazaar (se abre en otra pestaña; solo viaja el hash, nunca el archivo)">MalwareBazaar {{ icon("external") }}<span class="visually-hidden"> (se abre en otra pestaña)</span></a>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro kv(details, depth=0) -%}
+{%- if details -%}
+<dl class="kv{% if depth %} kv-nested{% endif %}">
+{% for k, v in details.items() %}
+  <dt>{{ k|key_label }}</dt>
+  <dd>
+  {%- if v is mapping -%}
+    {{ kv(v, depth + 1) if v else "—" }}
+  {%- elif v is iterable and v is not string -%}
+    {%- if v -%}<ul class="plain">{% for item in v %}<li>{% if item is mapping %}{{ kv(item, depth + 1) }}{% else %}{{ item|health_value }}{% endif %}</li>{% endfor %}</ul>{%- else -%}—{%- endif -%}
+  {%- else -%}
+    {{ v|health_value }}
+  {%- endif -%}
+  </dd>
+{% endfor %}
+</dl>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro chart(c, cid) -%}
+<figure class="chart">
+  <figcaption id="{{ cid }}-title" class="chart-title">{{ c.title }}</figcaption>
+  <ul class="legend" aria-label="Referencias del gráfico">
+    {% for lv in LEGEND_ORDER %}
+    <li><span class="swatch swatch-{{ lv }}" aria-hidden="true"></span>{{ LEVEL_LABELS[lv] }} <span class="legend-count">{{ c.totals[lv]|fmt_int }}</span></li>
+    {% endfor %}
+  </ul>
+  {% if c.empty %}<p class="empty">Todavía no hay mensajes analizados en este período.</p>{% endif %}
+  <svg class="chart-svg" viewBox="0 0 {{ c.w }} {{ c.h }}" role="img" aria-labelledby="{{ cid }}-title" preserveAspectRatio="xMidYMid meet">
+    {% for t in c.ticks %}
+    <line class="grid" x1="{{ c.left }}" x2="{{ c.right }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
+    <text class="tick" x="{{ c.left - 8 }}" y="{{ t.y }}" text-anchor="end" dominant-baseline="middle">{{ t.label }}</text>
+    {% endfor %}
+    {% for b in c.bars %}
+    <g class="bar">
+      <title>{{ b.title }}</title>
+      <rect class="hit" x="{{ b.hit_x }}" y="{{ c.top }}" width="{{ b.hit_w }}" height="{{ c.base_y - c.top }}"/>
+      {% for s in b.segments %}<path class="seg seg-{{ s.level }}" d="{{ s.d }}"/>{% endfor %}
+      {% if b.label %}<text class="xlabel" x="{{ b.label_x }}" y="{{ c.label_y }}" text-anchor="middle">{{ b.label }}</text>{% endif %}
+    </g>
+    {% endfor %}
+    <line class="baseline" x1="{{ c.left }}" x2="{{ c.right }}" y1="{{ c.base_y }}" y2="{{ c.base_y }}"/>
+  </svg>
+  <details class="chart-table">
+    <summary>Ver los datos en una tabla</summary>
+    <div class="table-wrap">
+      <table class="table compact">
+        <caption class="visually-hidden">{{ c.title }}</caption>
+        <thead><tr><th scope="col">Período</th>{% for lv in LEGEND_ORDER %}<th scope="col" class="num">{{ LEVEL_LABELS[lv] }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for b in c.bars %}
+          <tr><th scope="row">{{ b.full_label }}</th>{% for lv in LEGEND_ORDER %}<td class="num">{{ b.counts[lv]|fmt_int }}</td>{% endfor %}</tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</figure>
+{%- endmacro %}
+
+{% macro rank_bar(n, max_n) -%}
+{%- set pct = ((n / max_n * 100) if max_n else 0)|round(1) -%}
+<svg class="rank-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect class="track" x="0" y="0" width="100" height="4" rx="2"/><rect class="fill" x="0" y="0" width="{{ pct }}" height="4" rx="2"/></svg>
+{%- endmacro %}

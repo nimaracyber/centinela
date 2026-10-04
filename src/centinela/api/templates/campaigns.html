@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Campañas{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Campañas</h1>
+    <p class="lede">El mismo archivo adjunto llegando a varios mails o buzones: típico de un ataque dirigido a la empresa.</p>
+  </div>
+  <form method="get" action="/campaigns" class="filter-actions" aria-label="Período">
+    <label for="dias" class="visually-hidden">Período</label>
+    <select id="dias" name="dias">
+      {% for d in dias_choices %}<option value="{{ d }}"{% if d == dias %} selected{% endif %}>{% if d == 1 %}Último día{% else %}Últimos {{ d }} días{% endif %}</option>{% endfor %}
+    </select>
+    <button class="btn" type="submit">Ver</button>
+  </form>
+</div>
+
+{% if items %}
+<div class="card table-wrap">
+  <table class="table">
+    <caption class="visually-hidden">Campañas detectadas</caption>
+    <thead>
+      <tr>
+        <th scope="col">Nivel</th>
+        <th scope="col">Archivo</th>
+        <th scope="col" class="num">Mails</th>
+        <th scope="col">Buzones</th>
+        <th scope="col">Primera vez</th>
+        <th scope="col">Última vez</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in items %}
+      <tr>
+        <td>{{ m.level_badge(c.max_level) }}</td>
+        <td>
+          <span class="art-name">{{ (c.filename or "(sin nombre)")|visible|truncate(120, true, "…") }}</span>
+          <span class="tag">{{ c.detected_type|visible }}</span>
+          {% if c.malware_families %}<div class="families">{% for fam in c.malware_families[:5] %}<span class="tag tag-family">{{ fam|visible }}</span>{% endfor %}</div>{% endif %}
+          <div class="hash-row">
+            <code class="hash" title="{{ c.sha256 }}">{{ c.sha256|short_hash(16) }}</code>
+            {{ m.copy_button(c.sha256, "Copiar SHA-256") }}
+            {{ m.hash_links(c.sha256) }}
+            <a class="small" href="/messages?q={{ c.sha256|urlencode }}&amp;fp=1">Ver los mails</a>
+          </div>
+        </td>
+        <td class="num"><strong>{{ c.message_count|fmt_int }}</strong></td>
+        <td>
+          {% if c.mailboxes|length <= 3 %}
+            {{ c.mailboxes|map("visible")|join(", ") }}
+          {% else %}
+          <details>
+            <summary>{{ c.mailboxes|length }} buzones</summary>
+            <ul class="plain small">{% for mb in c.mailboxes %}<li>{{ mb|visible }}</li>{% endfor %}</ul>
+          </details>
+          {% endif %}
+        </td>
+        <td class="nowrap">{{ c.first_seen|fmt_dt }}</td>
+        <td class="nowrap">{{ c.last_seen|fmt_dt }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted small">Solo se cuentan mails sospechosos o maliciosos que no fueron marcados como falso positivo.</p>
+{% else %}
+<div class="card">
+  <p class="empty">No se detectaron campañas en este período: ningún archivo peligroso llegó a más de un mail.</p>
+</div>
+{% endif %}
+{% endblock %}

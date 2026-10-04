@@ -1,0 +1,151 @@
+# Centinela — configuración de ejemplo. Copiar a config.yaml y editar.
+# Los secretos se escriben como ${VARIABLE} y se cargan desde .env (nunca en claro acá).
+# Validar con:  centinela check-config
+
+general:
+  company_name: "Mi Empresa SRL"
+  company_domains: ["miempresa.com.ar"]   # para detectar suplantación y dominios parecidos
+  # socios, proveedores o tu plataforma de mailing: se excluyen de heurísticas débiles (nunca de firmas de malware)
+  trusted_domains: []
+  # quién agrega los resultados SPF/DKIM/DMARC confiables. Gmail/Workspace: ["mx.google.com"];
+  # Microsoft 365: ["mx.microsoft.com"]. Vacío = se confía en el encabezado de más arriba.
+  trusted_authserv_ids: []
+  data_dir: /data
+  log_level: INFO
+  retention_days: 180
+
+# Full (docker-compose.yml): PostgreSQL + Redis
+database_url: "postgresql+asyncpg://centinela:${POSTGRES_PASSWORD}@postgres:5432/centinela"
+redis_url: "redis://redis:6379/0"
+# Lite (docker-compose.lite.yml): descomentar y comentar las dos líneas de arriba
+# database_url: "sqlite+aiosqlite:////data/centinela.db"
+# redis_url: ""
+
+encryption_key: "${CENTINELA_ENCRYPTION_KEY}"   # cifra tokens OAuth guardados
+
+privacy:
+  hash_lookups: true    # consultar SHA-256 de adjuntos en MalwareBazaar/VirusTotal (el archivo NO sale)
+  url_lookups: false    # consultar links en URLhaus (las URLs pueden tener datos personales)
+
+# ---------------------------------------------------------------- de dónde leer los mails
+# Podés combinar varios conectores. Cada uno con un nombre único (minúsculas, guiones).
+connectors:
+
+  # 1) IMAP genérico: hosting propio (cPanel/Plesk), Yahoo, iCloud, Zoho, Dovecot, etc.
+  - name: oficina-imap
+    type: imap
+    host: mail.miempresa.com.ar
+    port: 993
+    security: ssl
+    username: ventas@miempresa.com.ar
+    password: "${IMAP_OFICINA_PASSWORD}"   # Yahoo/iCloud/Gmail exigen "contraseña de aplicación"
+    folders: ["INBOX", "Junk"]
+    idle: true            # tiempo real
+    tag: true             # agrega keyword $Centinela_Malicious / $Centinela_Suspicious (visible en Thunderbird)
+
+  # 2) Google Workspace: cuenta de servicio con delegación de dominio (todos los buzones).
+  # - name: workspace
+  #   type: gmail
+  #   auth: service_account
+  #   service_account_file: /config/secrets/google-sa.json
+  #   mailboxes: ["ventas@miempresa.com.ar", "admin@miempresa.com.ar"]
+  #   # tiempo real opcional (si no, polling cada 20 s):
+  #   # pubsub_topic: projects/mi-proyecto/topics/centinela
+  #   # pubsub_subscription: projects/mi-proyecto/subscriptions/centinela
+
+  # 3) Gmail personal (@gmail.com): OAuth de usuario. Después: centinela auth gmail-personal
+  # - name: gmail-personal
+  #   type: gmail
+  #   auth: oauth_user
+  #   oauth_client_file: /config/secrets/google-oauth-client.json
+  #   mailboxes: ["duenio.empresa@gmail.com"]
+
+  # 4) Microsoft 365 / Exchange Online (app registration con permisos de aplicación).
+  # - name: m365
+  #   type: graph
+  #   tenant_id: "00000000-0000-0000-0000-000000000000"
+  #   client_id: "00000000-0000-0000-0000-000000000000"
+  #   client_secret: "${GRAPH_CLIENT_SECRET}"
+  #   mailboxes: ["ventas@miempresa.com.ar", "compras@miempresa.com.ar"]
+
+  # 5) Outlook.com / Hotmail personal: IMAP con OAuth2. Después: centinela auth hotmail
+  # - name: hotmail
+  #   type: imap
+  #   host: outlook.office365.com
+  #   username: duenio@hotmail.com
+  #   oauth2: { provider: microsoft, client_id: "<app-id>", tenant: consumers }
+
+  # 6) Gateway con Postfix propio (milter). En Postfix: smtpd_milters = inet:centinela:8899
+  # - name: gateway
+  #   type: milter
+  #   listen_port: 8899
+  #   inline_timeout_s: 15
+  #   subject_prefix: "[SOSPECHOSO] "
+
+  # 7) Copias por BCC/journaling desde cualquier proveedor (solo alerta; no etiqueta)
+  # - name: journal
+  #   type: smtp_journal
+  #   listen_port: 2525
+  #   allowed_senders: ["203.0.113.10/32"]
+
+# ---------------------------------------------------------------- análisis
+analyzers:
+  clamav: { enabled: true, host: clamav, port: 3310 }
+  yara:
+    enabled: true
+    rules_dirs: ["rules/yara", "rules/custom"]
+  reputation:
+    enabled: true
+    malwarebazaar_api_key: "${MALWAREBAZAAR_API_KEY:-}"   # gratis en https://auth.abuse.ch
+    virustotal_api_key: "${VIRUSTOTAL_API_KEY:-}"         # gratis: 4 consultas/min
+  disabled: []          # ej: ["content"] para desactivar un analizador
+  # marcas de tu rubro a proteger de dominios parecidos: "dominio" o "Nombre: dominio1, dominio2"
+  extra_brands: []      # ej: ["Mi Proveedor: miproveedor.com.ar"]
+
+scoring:
+  suspicious_threshold: 30
+  malicious_threshold: 70
+  trusted_senders: []   # ej: ["@contador-de-confianza.com.ar"] (nunca anula firmas de malware)
+  rule_overrides: {}    # ej: { "url.shortener": 0 } para silenciar una regla
+
+# ---------------------------------------------------------------- qué hacer al detectar
+actions:
+  tag:
+    enabled: true
+    min_level: suspicious
+    label_suspicious: "Centinela/Sospechoso"
+    label_malicious: "Centinela/Malicioso"
+  alerts:
+    dashboard_base_url: "https://centinela.miempresa.com.ar"
+    dedup_window_minutes: 60
+    channels:
+      - name: telegram-soporte
+        type: telegram
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        min_level: suspicious
+      # - name: mail-admin
+      #   type: email
+      #   smtp_host: smtp.miempresa.com.ar
+      #   username: alertas@miempresa.com.ar
+      #   password: "${SMTP_ALERT_PASSWORD}"
+      #   from_addr: alertas@miempresa.com.ar
+      #   to: ["sistemas@miempresa.com.ar"]
+      #   min_level: malicious
+      # - name: slack
+      #   type: webhook
+      #   format: slack        # json | slack | teams | discord | google_chat
+      #   url: "${SLACK_WEBHOOK_URL}"
+      # - name: wazuh
+      #   type: syslog
+      #   host: 10.0.0.5
+      #   protocol: udp
+
+# ---------------------------------------------------------------- dashboard
+dashboard:
+  enabled: true
+  port: 8080
+  admin_user: admin
+  admin_password_hash: "${CENTINELA_DASHBOARD_PASSWORD_HASH}"
+  secret_key: "${CENTINELA_DASHBOARD_SECRET_KEY}"
+  trusted_proxies: []   # IP del reverse proxy (Caddy/Nginx/Traefik) si hay uno

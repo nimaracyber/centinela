@@ -1,0 +1,41 @@
+# Modo liviano para una oficina chica: un solo contenedor Centinela (SQLite + cola en memoria) + ClamAV.
+#   docker compose -f docker-compose.lite.yml up -d
+# En config.yaml: database_url: sqlite+aiosqlite:////data/centinela.db  y  redis_url vacío.
+
+services:
+  centinela:
+    image: centinela:local   # se construye con `build: .` la primera vez
+    build: .
+    restart: unless-stopped
+    command: ["run", "--role", "all"]
+    env_file: .env
+    environment: { CENTINELA_ROLE: all }
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./secrets:/config/secrets:ro
+      - ./rules/custom:/app/rules/custom:ro
+      - centinela-data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      clamav: { condition: service_healthy }
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes: [clamav-db:/var/lib/clamav]
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      start_period: 300s
+      retries: 5
+
+volumes:
+  centinela-data:
+  clamav-db:

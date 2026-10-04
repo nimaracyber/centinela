@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}{{ level|level_label }}: {{ (result.subject or "(sin asunto)")|visible|truncate(60, true, "…") }}{% endblock %}
+{% block content %}
+<a class="back" href="/messages">← Volver a Mensajes</a>
+{% if flash %}<p class="notice notice-ok" role="status">{{ flash }}</p>{% endif %}
+{% if truncated %}
+<p class="notice notice-warn" role="alert" data-truncated="1"><strong>Mail demasiado grande: solo se analizaron los encabezados.</strong> Superaba el límite de tamaño de análisis, así que Centinela revisó el remitente y los encabezados pero NO los adjuntos ni el contenido. No lo des por seguro.</p>
+{% endif %}
+
+<section class="verdict verdict-{{ level }}" aria-labelledby="verdict-title">
+  <div class="verdict-head">
+    <span class="verdict-icon">{{ m.icon(LEVEL_ICONS[level], "icon icon-lg") }}</span>
+    <div>
+      <p class="verdict-kicker">Veredicto de Centinela</p>
+      <h1 id="verdict-title" class="verdict-title">{{ level|level_label }} <span class="verdict-score">score {{ result.verdict.score }}/100</span></h1>
+      {% if result.verdict.summary %}<p class="verdict-summary">{{ result.verdict.summary|visible }}</p>{% endif %}
+      {% if families %}<p class="families">{% if families|length == 1 %}Familia{% else %}Familias{% endif %}: {% for fam in families %}<span class="tag tag-family">{{ fam|visible }}</span>{% endfor %}</p>{% endif %}
+      {% if false_positive %}<p><span class="tag tag-fp">Marcado como falso positivo</span></p>{% endif %}
+    </div>
+  </div>
+  <div class="todo">
+    <h2>Qué hacer</h2>
+    <ul>
+      {% for tip in recommendations %}<li>{{ tip }}</li>{% endfor %}
+    </ul>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card" aria-labelledby="datos-title">
+    <h2 id="datos-title" class="card-title">Datos del mail</h2>
+    <dl class="meta">
+      <dt>Asunto</dt><dd>{{ (result.subject or "(sin asunto)")|visible }}</dd>
+      <dt>De</dt><dd>{% if result.from_display %}{{ result.from_display|visible }} {% endif %}&lt;{{ (result.from_addr or "desconocido")|visible }}&gt;</dd>
+      <dt>Para</dt><dd>{% if result.to %}{{ result.to[:20]|map("visible")|join(", ") }}{% if result.to|length > 20 %} y {{ result.to|length - 20 }} más{% endif %}{% else %}—{% endif %}</dd>
+      <dt>Buzón</dt><dd>{{ result.ref.mailbox|visible }}</dd>
+      <dt>Conector</dt><dd>{{ result.ref.connector|visible }}{% if result.ref.folder %} · carpeta {{ result.ref.folder|visible }}{% endif %}</dd>
+      <dt>Message-ID</dt><dd><code>{{ (result.message_id or "—")|visible|truncate(200, true, "…") }}</code></dd>
+      <dt>Recibido</dt><dd>{{ result.received_at|fmt_dt(true) }}</dd>
+      <dt>Analizado</dt><dd>{{ result.analyzed_at|fmt_dt(true) }} · tardó {{ result.duration_ms|fmt_ms }}</dd>
+      <dt>Tamaño</dt><dd>{{ result.size|fmt_bytes }}</dd>
+      <dt>Id del análisis</dt><dd><code>{{ result.id }}</code> {{ m.copy_button(result.id|string, "Copiar id") }}</dd>
+    </dl>
+  </section>
+
+  <section class="card fp-card" aria-labelledby="fp-title">
+    <h2 id="fp-title" class="card-title">¿Es un falso positivo?</h2>
+    {% if false_positive %}
+    <p>Este mail está marcado como <strong>falso positivo</strong> (alguien lo revisó y lo consideró legítimo). Ya no aparece en los listados por defecto ni cuenta para las campañas.</p>
+    {% if fp_info %}
+    <dl class="meta fp-meta">
+      <dt>Marcado por</dt><dd>{{ fp_info.by or "—" }}</dd>
+      <dt>Fecha</dt><dd>{{ fp_info.at|fmt_dt }}</dd>
+      {% if fp_info.note %}<dt>Nota</dt><dd class="fp-note">{{ fp_info.note }}</dd>{% endif %}
+    </dl>
+    {% endif %}
+    <form method="post" action="/messages/{{ result.id }}/false-positive">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="value" value="0">
+      <button class="btn" type="submit">Deshacer: quitar la marca</button>
+    </form>
+    {% else %}
+    <p class="muted">Si revisaste este mail y es legítimo, marcalo. Queda registrado quién lo marcó; podés deshacerlo cuando quieras. Centinela no toca el mail en el buzón.</p>
+    {% if fp_info %}<p class="muted small fp-history">Antes estuvo marcado como falso positivo; {{ fp_info.by or "alguien" }} quitó la marca el {{ fp_info.at|fmt_dt }}.</p>{% endif %}
+    <form class="fp-form" method="post" action="/messages/{{ result.id }}/false-positive">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="value" value="1">
+      <label for="fp-note">Nota (opcional)</label>
+      <textarea id="fp-note" name="note" maxlength="{{ note_max }}" rows="2" placeholder="Ej.: confirmado por teléfono con el proveedor"></textarea>
+      <button class="btn btn-primary" type="submit">Marcar como falso positivo</button>
+    </form>
+    {% endif %}
+  </section>
+</div>
+
+<section aria-labelledby="hallazgos-title" class="card">
+  <h2 id="hallazgos-title" class="card-title">Hallazgos ({{ findings_total|fmt_int }})</h2>
+  {% if not groups %}
+  <p class="empty">El análisis no encontró nada para señalar.</p>
+  {% endif %}
+  {% for g in groups %}
+  <details class="finding-group"{% if g.severity > 0 %} open{% endif %}>
+    <summary>{{ m.sev_badge(g.severity) }} <span>{{ g["items"]|length }} {% if g["items"]|length == 1 %}hallazgo{% else %}hallazgos{% endif %}</span></summary>
+    {% for it in g["items"] %}
+    {% set f = it.finding %}
+    <article class="finding sev-border-{{ g.cls }}">
+      <header class="finding-head">
+        <h3>{{ f.title|visible }}</h3>
+        <span class="finding-score" title="Cuánto sumó al score del mail">+{{ f.score }}</span>
+      </header>
+      <p class="finding-meta">
+        <span class="tag">{{ f.category|category_label }}</span>
+        {% if f.malware_family %}<span class="tag tag-family">{{ f.malware_family|visible }}</span>{% endif %}
+        {% if it.artifact %}<span class="muted">en {{ it.artifact|visible|truncate(120, true, "…") }}</span>{% endif %}
+        <code class="rule" title="Regla que lo detectó">{{ f.rule|visible }}</code>
+      </p>
+      {% if f.description %}<p class="finding-desc">{{ f.description|visible }}</p>{% endif %}
+      {% if it.evidence %}
+      <details class="evidence">
+        <summary>Ver evidencia técnica</summary>
+        <pre>{{ it.evidence }}</pre>
+      </details>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </details>
+  {% endfor %}
+  {% if findings_hidden %}<p class="muted small">Hay {{ findings_hidden|fmt_int }} hallazgos más que no se muestran.</p>{% endif %}
+</section>
+
+<section aria-labelledby="archivos-title" class="card">
+  <h2 id="archivos-title" class="card-title">Archivos ({{ artifacts_total|fmt_int }})</h2>
+  {% if tree %}
+  <p class="muted small">Adjuntos y archivos encontrados adentro de ellos (ZIP, ISO, documentos...). Los archivos nunca salen de la empresa: los links buscan solamente el hash.</p>
+  {% if listing_only_total %}<p class="notice notice-warn">{{ listing_only_total|fmt_int }} {% if listing_only_total == 1 %}archivo solo se pudo listar{% else %}archivos solo se pudieron listar{% endif %} (por contraseña o tamaño): se vio el nombre, pero el contenido no se analizó.</p>{% endif %}
+  <ul class="tree">
+  {% for a, depth in tree %}
+    {% set pa = per_artifact.get(a.id) %}
+    <li class="art depth-{{ depth }}">
+      <div class="art-head">
+        {{ m.icon("file") }}
+        <span class="art-name">{{ (a.filename or a.id)|visible }}</span>
+        <span class="tag" title="Tipo real detectado por el contenido">{{ a.detected_type|visible }}</span>
+        <span class="muted small">{{ a.size|fmt_bytes }}</span>
+        {% if pa %}{{ m.sev_badge(pa.max) }} <span class="muted small">{{ pa.count }} {% if pa.count == 1 %}hallazgo{% else %}hallazgos{% endif %}</span>{% endif %}
+        {% if a.encrypted %}<span class="tag tag-warn">Cifrado: no se pudo abrir</span>{% elif a.password_protected %}<span class="tag tag-warn" title="Mandar archivos con contraseña es un truco común para esquivar los antivirus">Con contraseña</span>{% endif %}
+        {% if a.listing_only %}<span class="tag tag-warn" title="Centinela vio el nombre y el tamaño, pero no pudo sacar el archivo para analizarlo">Solo listado: no se analizó</span>{% endif %}
+      </div>
+      {% if a.declared_content_type %}<div class="muted small">El mail dice que es: {{ a.declared_content_type|visible|truncate(100, true, "…") }}</div>{% endif %}
+      {% if a.extraction_note %}<div class="muted small">Nota: {{ a.extraction_note|visible }}</div>{% endif %}
+      {% if a.sha256 %}
+      <div class="hash-row">
+        <span class="hash-label">SHA-256</span>
+        <code class="hash">{{ a.sha256 }}</code>
+        {{ m.copy_button(a.sha256, "Copiar SHA-256") }}
+        {{ m.hash_links(a.sha256) }}
+      </div>
+      {% endif %}
+      {% if a.sha1 or a.md5 %}
+      <details class="more-hashes">
+        <summary>Otros hashes</summary>
+        {% if a.sha1 %}<div class="hash-row"><span class="hash-label">SHA-1</span><code class="hash">{{ a.sha1 }}</code>{{ m.copy_button(a.sha1, "Copiar SHA-1") }}</div>{% endif %}
+        {% if a.md5 %}<div class="hash-row"><span class="hash-label">MD5</span><code class="hash">{{ a.md5 }}</code>{{ m.copy_button(a.md5, "Copiar MD5") }}</div>{% endif %}
+      </details>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+  {% if artifacts_hidden %}<p class="muted small">Hay {{ artifacts_hidden|fmt_int }} archivos más que no se muestran.</p>{% endif %}
+  {% else %}
+  <p class="empty">Este mail no tenía archivos adjuntos.</p>
+  {% endif %}
+</section>
+
+<section aria-labelledby="links-title" class="card">
+  <h2 id="links-title" class="card-title">Links ({{ urls_total|fmt_int }})</h2>
+  {% if urls %}
+  <p class="muted small">Se muestran desactivados (<code>hxxp</code>, <code>[.]</code>) para que nadie los abra por error. No los visites desde una computadora de la empresa.</p>
+  <ul class="url-list">
+    {% for u in urls %}
+    <li>
+      <code class="url" title="{{ u.full }}">{{ u.text }}</code>{{ m.copy_button(u.full, "Copiar link desactivado") }}
+      <div class="muted small">{{ u.source }}{% if u.display_text %} · Texto visible en el mail: «{{ u.display_text }}»{% endif %}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if urls_hidden %}<p class="muted small">Hay {{ urls_hidden|fmt_int }} links más que no se muestran.</p>{% endif %}
+  {% else %}
+  <p class="empty">No se encontraron links.</p>
+  {% endif %}
+</section>
+
+<div class="grid-2">
+  <section aria-labelledby="acciones-title" class="card">
+    <h2 id="acciones-title" class="card-title">Acciones realizadas</h2>
+    {% if actions %}
+    <ul>{% for a in actions %}<li>{{ a }}</li>{% endfor %}</ul>
+    {% else %}
+    <p class="empty">Ninguna (los mails limpios no se etiquetan ni generan alertas).</p>
+    {% endif %}
+  </section>
+  <section aria-labelledby="errores-title" class="card">
+    <h2 id="errores-title" class="card-title">Errores del análisis</h2>
+    {% if errors %}
+    <p class="muted small">Partes del análisis que fallaron. Si hay errores, el resultado puede estar incompleto.</p>
+    <ul>{% for e in errors %}<li><code>{{ e }}</code></li>{% endfor %}</ul>
+    {% else %}
+    <p class="empty">Sin errores: todos los analizadores terminaron bien.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

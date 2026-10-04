@@ -1,0 +1,49 @@
+{% import "_macros.html" as m %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
+  <title>{% block title %}Centinela{% endblock %} · Centinela</title>
+  <link rel="icon" href="{{ static_url('img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+  <script src="{{ static_url('js/app.js') }}" defer></script>
+</head>
+<body{% block body_attrs %}{% endblock %}>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+{% if user %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">{{ m.icon("shield") }}<span>Centinela</span></a>
+    <span class="company">{{ company_name }}</span>
+    <nav class="mainnav" aria-label="Secciones">
+      <ul>
+        <li><a href="/"{% if nav == "resumen" %} aria-current="page"{% endif %}>Resumen</a></li>
+        <li><a href="/messages"{% if nav == "mensajes" %} aria-current="page"{% endif %}>Mensajes</a></li>
+        <li><a href="/campaigns"{% if nav == "campanas" %} aria-current="page"{% endif %}>Campañas</a></li>
+        <li><a href="/status"{% if nav == "estado" %} aria-current="page"{% endif %}>Estado</a></li>
+      </ul>
+    </nav>
+    <form class="logout-form" method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <span class="user">{{ user }}</span>
+      <button class="btn btn-ghost" type="submit">Salir</button>
+    </form>
+  </div>
+</header>
+{% endif %}
+<main id="contenido" class="{% block main_class %}container{% endblock %}" tabindex="-1">
+{% block content %}{% endblock %}
+</main>
+{% if user %}
+<footer class="footer">
+  Centinela {{ version }} · Análisis pasivo: nunca bloquea, borra ni mueve mails; solo etiqueta y avisa.
+  Los archivos adjuntos no salen de la empresa: solo se consultan sus hashes.
+</footer>
+{% endif %}
+</body>
+</html>

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Mensajes{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Mensajes</h1>
+    <p class="lede">Todos los mails analizados, del más nuevo al más viejo.</p>
+  </div>
+</div>
+
+<form class="card filters" method="get" action="/messages" role="search" aria-label="Filtrar mensajes">
+  <div class="field field-wide">
+    <label for="f-q">Buscar</label>
+    <input id="f-q" type="search" name="q" value="{{ f.q }}" maxlength="200" placeholder="Asunto, remitente, nombre de archivo o hash">
+  </div>
+  <div class="field">
+    <label for="f-nivel">Nivel</label>
+    <select id="f-nivel" name="nivel">
+      {% for value, label in NIVEL_CHOICES %}<option value="{{ value }}"{% if value == f.nivel %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-conector">Conector</label>
+    <select id="f-conector" name="conector">
+      <option value="">Todos</option>
+      {% for c in connectors %}<option value="{{ c }}"{% if c == f.conector %} selected{% endif %}>{{ c|visible }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-buzon">Buzón</label>
+    <input id="f-buzon" type="text" name="buzon" value="{{ f.buzon }}" maxlength="320" placeholder="ventas@empresa.com" autocapitalize="none" spellcheck="false">
+  </div>
+  <div class="field">
+    <label for="f-desde">Desde</label>
+    <input id="f-desde" type="date" name="desde" value="{{ f.desde }}">
+  </div>
+  <div class="field">
+    <label for="f-hasta">Hasta</label>
+    <input id="f-hasta" type="date" name="hasta" value="{{ f.hasta }}">
+  </div>
+  <div class="field field-check">
+    <input id="f-fp" type="checkbox" name="fp" value="1"{% if f.fp %} checked{% endif %}>
+    <label for="f-fp">Incluir falsos positivos</label>
+  </div>
+  {% if f.familia %}<input type="hidden" name="familia" value="{{ f.familia }}">{% endif %}
+  <div class="filter-actions">
+    <button class="btn btn-primary" type="submit">Filtrar</button>
+    {% if f.active %}<a class="btn btn-ghost" href="/messages">Limpiar</a>{% endif %}
+  </div>
+</form>
+
+{% if f.familia %}
+<p class="chips">Familia: <span class="chip">{{ f.familia|visible }} <a href="/messages{% if clear_family_query %}?{{ clear_family_query }}{% endif %}" aria-label="Quitar el filtro de familia">✕</a></span></p>
+{% endif %}
+{% for err in f.errors %}<p class="notice notice-warn" role="alert">{{ err }}</p>{% endfor %}
+
+<p class="result-count" role="status">
+  {% if total == 1 %}1 mensaje{% else %}{{ total|fmt_int }} mensajes{% endif %}
+  {%- if total > items|length and items %} · mostrando {{ first_index|fmt_int }}–{{ (first_index + items|length - 1)|fmt_int }}{% endif %}
+  {%- if not f.fp %} · sin falsos positivos{% endif %}
+</p>
+
+{% if items %}
+<div class="card table-wrap">
+  <table class="table">
+    <caption class="visually-hidden">Mensajes analizados</caption>
+    <thead>
+      <tr>
+        <th scope="col">Nivel</th>
+        <th scope="col">Recibido</th>
+        <th scope="col">Asunto</th>
+        <th scope="col">De</th>
+        <th scope="col" class="hide-sm">Buzón</th>
+        <th scope="col" class="num hide-sm">Adjuntos</th>
+        <th scope="col" class="num hide-sm">Hallazgos</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for it in items %}
+      <tr class="row-{{ it.level|level_value }}{% if it.false_positive %} row-fp{% endif %}">
+        <td>
+          {{ m.level_badge(it.level, it.score) }}
+          {% if it.false_positive %}<div><span class="tag tag-fp">Falso positivo</span></div>{% endif %}
+        </td>
+        <td class="nowrap">{{ it.received_at|fmt_dt }}</td>
+        <td class="subject">
+          <a href="/messages/{{ it.id }}">{{ (it.subject or "(sin asunto)")|visible|truncate(140, true, "…") }}</a>
+          {% if it.malware_families %}<div class="families">{% for fam in it.malware_families[:3] %}<span class="tag tag-family">{{ fam|visible }}</span>{% endfor %}</div>{% endif %}
+          {% if it.summary and (it.level|level_value) != "clean" %}<div class="summary">{{ it.summary|visible|truncate(180, true, "…") }}</div>{% endif %}
+        </td>
+        <td class="sender">
+          {% if it.from_display %}<span class="sender-name">{{ it.from_display|visible|truncate(60, true, "…") }}</span>{% endif %}
+          <span class="sender-addr">{{ (it.from_addr or "—")|visible|truncate(80, true, "…") }}</span>
+        </td>
+        <td class="hide-sm">{{ it.mailbox|visible|truncate(60, true, "…") }}<div class="muted small">{{ it.connector|visible }}</div></td>
+        <td class="num hide-sm">{{ it.artifact_count|fmt_int }}</td>
+        <td class="num hide-sm">{{ it.finding_count|fmt_int }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  {% if page > 1 and total %}
+  <p class="empty">No hay más resultados en esta página. <a href="/messages?{{ f.query(pagina=1) }}">Volver a la primera página</a>.</p>
+  {% elif f.active %}
+  <p class="empty">Ningún mensaje coincide con estos filtros.</p>
+  {% else %}
+  <p class="empty">Todavía no se analizó ningún mensaje. Cuando lleguen mails a los buzones vigilados, van a aparecer acá.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if pages > 1 %}
+<nav class="pagination" aria-label="Paginación">
+  {% if prev_query is not none %}<a class="btn" href="/messages{% if prev_query %}?{{ prev_query }}{% endif %}" rel="prev">← Anteriores</a>{% else %}<span class="btn disabled" aria-disabled="true">← Anteriores</span>{% endif %}
+  <span class="muted">Página {{ page|fmt_int }} de {{ pages|fmt_int }}</span>
+  {% if next_query is not none %}<a class="btn" href="/messages?{{ next_query }}" rel="next">Siguientes →</a>{% else %}<span class="btn disabled" aria-disabled="true">Siguientes →</span>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

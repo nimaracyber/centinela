@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# configuración y secretos locales
+.env
+config.yaml
+secrets/
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# reglas propias del usuario
+rules/custom/*
+!rules/custom/.gitkeep
+
+# muestras: nunca versionar malware ni mails reales
+samples/
+*.eml
+!tests/**/*.eml

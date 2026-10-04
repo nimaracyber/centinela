@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Resumen{% endblock %}
+{% block body_attrs %} data-autorefresh="stats"{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Resumen</h1>
+    <p class="lede">Lo que Centinela analizó en el correo de {{ company_name }} y lo que encontró.</p>
+  </div>
+  <p class="refresh-note" id="refresh-status" aria-live="polite">Los números se actualizan solos cada 30 segundos.</p>
+</div>
+
+{% for period, k, key, desde in (("Últimas 24 horas", k24, "24h", desde24), ("Últimos 7 días", k7, "7d", desde7)) %}
+<section aria-labelledby="kpi-{{ key }}">
+  <h2 id="kpi-{{ key }}" class="section-title">{{ period }}</h2>
+  <div class="kpis">
+    <a class="kpi kpi-total" href="/messages?desde={{ desde }}">
+      <span class="kpi-label">Analizados</span>
+      <span class="kpi-value" data-kpi="{{ key }}.total">{{ k.total|fmt_int }}</span>
+    </a>
+    <a class="kpi kpi-suspicious" href="/messages?nivel=suspicious&amp;desde={{ desde }}">
+      <span class="kpi-label">{{ m.icon("alert") }} Sospechosos</span>
+      <span class="kpi-value" data-kpi="{{ key }}.suspicious">{{ k.suspicious|fmt_int }}</span>
+    </a>
+    <a class="kpi kpi-malicious" href="/messages?nivel=malicious&amp;desde={{ desde }}">
+      <span class="kpi-label">{{ m.icon("x") }} Maliciosos</span>
+      <span class="kpi-value" data-kpi="{{ key }}.malicious">{{ k.malicious|fmt_int }}</span>
+    </a>
+    <a class="kpi kpi-error" href="/messages?nivel=error&amp;desde={{ desde }}">
+      <span class="kpi-label">{{ m.icon("question") }} Errores de análisis</span>
+      <span class="kpi-value" data-kpi="{{ key }}.error">{{ k.error|fmt_int }}</span>
+    </a>
+  </div>
+</section>
+{% endfor %}
+
+<h2 class="section-title">Actividad</h2>
+<div class="grid-2">
+  <section class="card" aria-label="Gráfico de las últimas 24 horas">{{ m.chart(chart24, "chart24") }}</section>
+  <section class="card" aria-label="Gráfico de los últimos 7 días">{{ m.chart(chart7, "chart7") }}</section>
+</div>
+{% if avg_ms %}<p class="muted small">Tiempo promedio de análisis en las últimas 24 horas: {{ avg_ms|int|fmt_ms }}.</p>{% endif %}
+
+<h2 class="section-title">Últimos 7 días</h2>
+<div class="grid-3">
+  <section class="card" aria-labelledby="top-familias">
+    <h3 id="top-familias" class="card-title">Familias de malware</h3>
+    {% if top_families %}
+    {% set max_n = top_families[0][1] %}
+    <ol class="rank">
+      {% for name, n in top_families %}
+      <li><a class="rank-name" href="/messages?familia={{ name|urlencode }}&amp;fp=1">{{ name|visible }}</a><span class="rank-n">{{ n|fmt_int }}</span>{{ m.rank_bar(n, max_n) }}</li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">No se detectaron familias de malware conocidas.</p>
+    {% endif %}
+  </section>
+  <section class="card" aria-labelledby="top-remitentes">
+    <h3 id="top-remitentes" class="card-title">Remitentes peligrosos</h3>
+    {% if top_senders %}
+    {% set max_n = top_senders[0][1] %}
+    <ol class="rank">
+      {% for sender, n in top_senders %}
+      <li><a class="rank-name" href="/messages?q={{ sender|urlencode }}&amp;nivel=amenazas">{{ sender|visible }}</a><span class="rank-n">{{ n|fmt_int }}</span>{{ m.rank_bar(n, max_n) }}</li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">Ningún remitente envió mails sospechosos o maliciosos.</p>
+    {% endif %}
+  </section>
+  <section class="card" aria-labelledby="top-reglas">
+    <h3 id="top-reglas" class="card-title">Reglas que más se activaron</h3>
+    {% if top_rules %}
+    {% set max_n = top_rules[0][1] %}
+    <ol class="rank">
+      {% for rule, n in top_rules %}
+      <li><code class="rank-name">{{ rule|visible }}</code><span class="rank-n">{{ n|fmt_int }}</span>{{ m.rank_bar(n, max_n) }}</li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">Ninguna regla se activó en este período.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" aria-labelledby="ultimas">
+  <div class="card-head">
+    <h2 id="ultimas" class="card-title">Últimos mails maliciosos o sospechosos</h2>
+    <a href="/messages?nivel=amenazas">Ver todos</a>
+  </div>
+  {% if recent %}
+  <div class="table-wrap">
+    <table class="table">
+      <caption class="visually-hidden">Últimos 10 mails maliciosos o sospechosos</caption>
+      <thead>
+        <tr><th scope="col">Nivel</th><th scope="col">Recibido</th><th scope="col">Asunto</th><th scope="col">De</th><th scope="col" class="hide-sm">Buzón</th></tr>
+      </thead>
+      <tbody>
+      {% for it in recent %}
+        <tr>
+          <td>{{ m.level_badge(it.level, it.score) }}</td>
+          <td class="nowrap">{{ it.received_at|fmt_dt }}</td>
+          <td class="subject">
+            <a href="/messages/{{ it.id }}">{{ (it.subject or "(sin asunto)")|visible|truncate(120, true, "…") }}</a>
+            {% if it.malware_families %}<div class="families">{% for fam in it.malware_families[:3] %}<span class="tag tag-family">{{ fam|visible }}</span>{% endfor %}</div>{% endif %}
+          </td>
+          <td class="sender">
+            {% if it.from_display %}<span class="sender-name">{{ it.from_display|visible|truncate(60, true, "…") }}</span>{% endif %}
+            <span class="sender-addr">{{ (it.from_addr or "—")|visible|truncate(80, true, "…") }}</span>
+          </td>
+          <td class="hide-sm">{{ it.mailbox|visible|truncate(60, true, "…") }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No hay mails sospechosos ni maliciosos. Centinela sigue vigilando.</p>
+  {% endif %}
+</section>
+{% endblock %}

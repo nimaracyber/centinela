@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Error {{ status_code }}{% endblock %}
+{% block content %}
+<div class="card narrow error-card">
+  <h1>{{ title }}</h1>
+  <p>{{ message }}</p>
+  <p class="muted small">Código {{ status_code }}</p>
+  <p><a class="btn" href="/">Volver al resumen</a>{% if status_code == 404 %} <a class="btn btn-ghost" href="/messages">Ir a Mensajes</a>{% endif %}</p>
+</div>
+{% endblock %}

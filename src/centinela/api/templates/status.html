@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Estado{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Estado del sistema</h1>
+    <p class="lede">Si algo de esto está en rojo, Centinela puede estar dejando mails sin analizar.</p>
+  </div>
+</div>
+
+{% if error %}
+<p class="notice notice-error" role="alert">{{ error }}</p>
+{% else %}
+{% set overall = {"ok": ("clean", "Todo funciona"), "degraded": ("suspicious", "Funciona con problemas"), "error": ("malicious", "Hay componentes caídos")}[s.status] %}
+<section class="verdict verdict-{{ overall[0] }}" aria-labelledby="estado-general">
+  <div class="verdict-head">
+    <span class="verdict-icon">{{ m.icon(LEVEL_ICONS[overall[0]], "icon icon-lg") }}</span>
+    <div>
+      <p class="verdict-kicker">Estado general</p>
+      <h2 id="estado-general" class="verdict-title">{{ overall[1] }}</h2>
+      <p class="verdict-summary">
+        Versión {{ (s.version or "?")|visible }}{% if s.role %} · rol <code>{{ s.role|visible }}</code>{% endif %}{% if s.started_at %} · en marcha desde {{ s.started_at|fmt_dt }}{% endif %}
+      </p>
+      {% if s.degraded %}<p>Con problemas: {% for d in s.degraded %}<span class="tag tag-warn">{{ d|visible }}</span>{% endfor %}</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+<h2 class="section-title">Componentes</h2>
+<div class="status-grid">
+  {% for c in s.components %}
+  <section class="card" aria-label="{{ c.name }}">
+    <div class="status-head">
+      <h3>{{ c.name }}</h3>
+      {% if c.ok %}<span class="badge badge-clean">{{ m.icon("check") }}<span>OK</span></span>
+      {% elif c.warn_only %}<span class="badge badge-suspicious">{{ m.icon("alert") }}<span>Revisar</span></span>
+      {% else %}<span class="badge badge-malicious">{{ m.icon("x") }}<span>Con fallas</span></span>{% endif %}
+    </div>
+    {% if c.note %}<p class="muted small">{{ c.note }}</p>{% endif %}
+    {{ m.kv(c.details) }}
+  </section>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">Conectores (buzones vigilados)</h2>
+{% if s.connectors %}
+<div class="status-grid">
+  {% for c in s.connectors %}
+  <section class="card" aria-label="Conector {{ c.name }}">
+    <div class="status-head">
+      <h3><code>{{ c.name|visible }}</code></h3>
+      {% if c.ok %}<span class="badge badge-clean">{{ m.icon("check") }}<span>Conectado</span></span>
+      {% else %}<span class="badge badge-malicious">{{ m.icon("x") }}<span>Con fallas</span></span>{% endif %}
+    </div>
+    {{ m.kv(c.details) }}
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><p class="empty">No hay conectores en este proceso (rol de solo API/worker, o ninguno configurado en <code>config.yaml</code>).</p></div>
+{% endif %}
+
+<div class="grid-2">
+  <section class="card" aria-labelledby="analizadores">
+    <h2 id="analizadores" class="card-title">Analizadores activos</h2>
+    {% if s.analyzers %}<p>{% for a in s.analyzers %}<span class="tag">{{ a|visible }}</span>{% endfor %}</p>
+    {% else %}<p class="empty">No hay analizadores cargados en este proceso.</p>{% endif %}
+  </section>
+  <section class="card" aria-labelledby="canales">
+    <h2 id="canales" class="card-title">Canales de alerta</h2>
+    {% if s.alert_channels %}<p>{% for c in s.alert_channels %}<span class="tag">{{ c|visible }}</span>{% endfor %}</p>
+    {% else %}<p class="empty">No hay canales de alerta configurados: las detecciones solo se ven acá.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
+
+<section class="card" aria-labelledby="monitoreo">
+  <h2 id="monitoreo" class="card-title">Monitoreo externo</h2>
+  <p class="small">
+    <code>/healthz</code> (el proceso responde), <code>/readyz</code> (base y cola disponibles) y <code>/metrics</code>
+    (Prometheus) no piden login. <strong>No expongas el dashboard directo a internet</strong>: usá un proxy con HTTPS
+    y bloqueá <code>/metrics</code> desde afuera.
+  </p>
+</section>
+{% endblock %}
